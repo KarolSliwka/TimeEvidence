@@ -1,0 +1,199 @@
+﻿@page "/"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using TimeEvidence.Services
+@using TimeEvidence.Models
+@inject TimeTrackerDataService TimeTrackerService
+@inject NavigationManager Navigation
+@implements IDisposable
+
+<PageTitle>Time Evidence Tracker</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Time Evidence Tracker</h1>
+    @if (showUpdateIndicator)
+    {
+        <span class="badge bg-success fs-6">
+            <i class="fas fa-check"></i> New data received!
+        </span>
+    }
+</div>
+
+<div class="card mb-4">
+    <div class="card-header">Test Notifications</div>
+    <div class="card-body">
+        <TestNotificationPanel />
+    </div>
+</div>
+
+<DashboardCards LatestData="latestData" OnRefresh="RefreshData" OnClearData="ClearData"
+    OnShowAssignCard="ShowQuickAssignModal" OnManageEmployees="NavigateToEmployees" />
+
+@if (timeTrackerDataList != null && timeTrackerDataList.Any())
+{
+    <TimeTrackerTable TimeTrackerDataList="timeTrackerDataList" OnAssignCard="ShowQuickAssignModalWithCard" />
+
+    @if (TimeTrackerService.GetDataCount() > 50)
+    {
+        <div class="alert alert-info">
+            <i class="fas fa-info-circle"></i>
+            Showing latest 50 records of @TimeTrackerService.GetDataCount() total records.
+        </div>
+    }
+}
+else
+{
+    <div class="alert alert-warning text-center">
+        <h4><i class="fas fa-exclamation-triangle"></i> No Time Tracker Data Available</h4>
+        <p>No time tracker data has been received yet. Send JSON data to: <code>/api/timetracker/data</code></p>
+        <div class="mt-3">
+            <h6>Example JSON structure:</h6>
+            <pre class="bg-light p-3 rounded"><code>{
+                            "system_id": "TIME_TRACKER_01",
+                            "action": "LOGIN",
+                            "card_id": "F3222711",
+                            "status": "SUCCESS",
+                            "timestamp_iso": "2025-10-14T22:05:12+02:00",
+                            "timestamp_local": "22:05:12",
+                            "active_sessions": 1,
+                            "system_uptime": 35372,
+                            "wifi_connected": true
+                        }</code></pre>
+        </div>
+        <div class="mt-3">
+            <a href="/employees" class="btn btn-primary me-2">
+                <i class="fas fa-users"></i> Manage Employees
+            </a>
+            <button class="btn btn-success" @onclick="ShowQuickAssignModal">
+                <i class="fas fa-credit-card"></i> Assign Cards
+            </button>
+        </div>
+    </div>
+}
+
+<!-- Quick Assign Modal -->
+<QuickAssignModal ShowModal="showQuickAssignModal" CardId="@selectedCardId" OnModalClosed="CloseQuickAssignModal"
+    OnCardAssigned="OnCardAssigned" />
+
+@code {
+    private IEnumerable<TimeTrackerData>? timeTrackerDataList;
+    private TimeTrackerData? latestData;
+    private Timer? refreshTimer;
+    private Timer? indicatorTimer;
+    private bool showUpdateIndicator = false;
+    private bool showQuickAssignModal = false;
+    private string? selectedCardId;
+
+    protected override void OnInitialized()
+    {
+        RefreshData();
+
+        // Subscribe to real-time events
+        TimeTrackerService.DataAdded += OnDataAdded;
+        TimeTrackerService.DataCleared += OnDataCleared;
+
+        // Auto-refresh every 10 seconds as backup (reduced frequency since we have real-time updates)
+        refreshTimer = new Timer(async _ =>
+        {
+            await InvokeAsync(() =>
+    {
+            RefreshData();
+            StateHasChanged();
+        });
+        }, null, TimeSpan.Zero, TimeSpan.FromSeconds(10));
+    }
+
+    private void RefreshData()
+    {
+        timeTrackerDataList = TimeTrackerService.GetAllData();
+        latestData = TimeTrackerService.GetLatestData();
+    }
+
+    private void ShowUpdateIndicator()
+    {
+        showUpdateIndicator = true;
+
+        // Hide the indicator after 3 seconds
+        indicatorTimer?.Dispose();
+        indicatorTimer = new Timer(_ =>
+        {
+            InvokeAsync(() =>
+    {
+            showUpdateIndicator = false;
+            StateHasChanged();
+        });
+        }, null, TimeSpan.FromSeconds(3), Timeout.InfiniteTimeSpan);
+    }
+
+    private void ClearData()
+    {
+        TimeTrackerService.ClearData();
+        RefreshData();
+    }
+
+    // Navigation methods
+    private void NavigateToEmployees()
+    {
+        Navigation.NavigateTo("/employees");
+    }
+
+    // Quick assign modal methods
+    private void ShowQuickAssignModal()
+    {
+        selectedCardId = null;
+        showQuickAssignModal = true;
+    }
+
+    private void ShowQuickAssignModalWithCard(string cardId)
+    {
+        selectedCardId = cardId?.Trim();
+        showQuickAssignModal = true;
+    }
+
+    private void CloseQuickAssignModal()
+    {
+        showQuickAssignModal = false;
+        selectedCardId = null;
+    }
+
+    private void OnCardAssigned()
+    {
+        RefreshData(); // Refresh to show updated employee assignments
+        ShowUpdateIndicator(); // Show success indicator
+        StateHasChanged();
+    }
+
+    // Real-time event handlers
+    private async void OnDataAdded(object? sender, TimeTrackerData newData)
+    {
+        await InvokeAsync(() =>
+        {
+            RefreshData();
+            ShowUpdateIndicator();
+            StateHasChanged();
+        });
+    }
+
+    private async void OnDataCleared(object? sender, EventArgs e)
+    {
+        await InvokeAsync(() =>
+        {
+            RefreshData();
+            StateHasChanged();
+        });
+    }
+
+
+
+    public void Dispose()
+    {
+        // Unsubscribe from events
+        if (TimeTrackerService != null)
+        {
+            TimeTrackerService.DataAdded -= OnDataAdded;
+            TimeTrackerService.DataCleared -= OnDataCleared;
+        }
+
+        refreshTimer?.Dispose();
+        indicatorTimer?.Dispose();
+    }
+}

@@ -1,0 +1,31 @@
+﻿@inherits LayoutComponentBase
+
+<PageTitle>Time Evidence Tracker</PageTitle>
+
+<div class="page">
+    <AuthorizeView>
+        <Authorized>
+            <div class="sidebar">
+                <NavMenu />
+            </div>
+        </Authorized>
+    </AuthorizeView>
+
+    <main>
+        <AuthorizeView>
+            <Authorized>
+                <div class="top-row px-4 d-flex align-items-center">
+                    <div class="ms-auto">
+                        <form method="post" action="/logout">
+                            <button class="btn btn-sm btn-outline-secondary">Logout</button>
+                        </form>
+                    </div>
+                </div>
+            </Authorized>
+        </AuthorizeView>
+
+        <article class="content px-4">
+            @Body
+        </article>
+    </main>
+</div>

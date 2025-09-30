@@ -1,0 +1,33 @@
+@page "/login"
+@attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
+@inject NavigationManager Nav
+@using Microsoft.AspNetCore.WebUtilities
+
+<div class="container py-5" style="max-width: 480px;">
+    <div class="card shadow-sm">
+        <div class="card-body p-4">
+            <div class="text-center mb-4">
+                <h2 class="h3 mb-1"><span class="oi oi-clock me-2"></span>Time Evidence</h2>
+                <div class="text-muted">Sign in to continue</div>
+            </div>
+
+            @if (QueryHelpers.ParseQuery(new Uri(Nav.Uri).Query).ContainsKey("error"))
+            {
+                <div class="alert alert-danger">Invalid username or password.</div>
+            }
+
+            <form method="post" action="/login">
+                <input type="hidden" name="ReturnUrl" value="@Nav.ToBaseRelativePath(Nav.Uri)" />
+                <div class="mb-3">
+                    <label class="form-label">Username</label>
+                    <input class="form-control" name="Username" autocomplete="username" />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Password</label>
+                    <input class="form-control" name="Password" type="password" autocomplete="current-password" />
+                </div>
+                <button type="submit" class="btn btn-primary w-100">Log in</button>
+            </form>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,146 @@
+@using TimeEvidence.Services
+@using TimeEvidence.Models
+@inject EmployeeService EmployeeService
+@inject IJSRuntime JSRuntime
+
+<!-- Quick Card Assignment Modal -->
+@if (ShowModal)
+{
+    <div class="modal show d-block" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-credit-card"></i>
+                        Quick Assign Card @if (!string.IsNullOrEmpty(CardId))
+                        {
+                            <text>: <code>@CardId</code></text>
+                        }
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="CloseModal"></button>
+                </div>
+                <div class="modal-body">
+                    @if (string.IsNullOrEmpty(CardId))
+                    {
+                        <div class="mb-3">
+                            <label class="form-label" for="quickAssignCardInput">Card ID</label>
+                            <input id="quickAssignCardInput" class="form-control" placeholder="Enter card id (e.g., F3222711)"
+                                @bind="cardInput" />
+                            <small class="text-muted">Scan a card or type the card ID to assign.</small>
+                        </div>
+                    }
+                    @if (unassignedEmployees != null && unassignedEmployees.Any())
+                    {
+                        <div class="mb-3">
+                            <label class="form-label">Select Employee</label>
+                            <select class="form-select" @bind="selectedEmployeeId">
+                                <option value="">Choose an employee...</option>
+                                @foreach (var employee in unassignedEmployees)
+                                {
+                                    <option value="@employee.Id">@employee.FullName (@employee.Position)</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" @bind="grantAccess" id="quickGrantAccess">
+                            <label class="form-check-label" for="quickGrantAccess">
+                                Grant access immediately
+                            </label>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <strong>No unassigned employees found.</strong>
+                            <br>All employees already have cards assigned.
+                            <a href="/employees" class="alert-link">Manage employees</a> to create new ones or unassign existing
+                            cards.
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseModal">Cancel</button>
+                    @if (unassignedEmployees != null && unassignedEmployees.Any())
+                    {
+                        <button type="button" class="btn btn-primary" @onclick="AssignCard"
+                            disabled="@(selectedEmployeeId == Guid.Empty || string.IsNullOrWhiteSpace(GetEffectiveCardId()))">
+                            <i class="fas fa-check"></i> Assign Card
+                        </button>
+                    }
+                    else
+                    {
+                        <a href="/employees" class="btn btn-primary">
+                            <i class="fas fa-users"></i> Manage Employees
+                        </a>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop show"></div>
+}
+
+@code {
+    [Parameter] public bool ShowModal { get; set; }
+    [Parameter] public string? CardId { get; set; }
+    [Parameter] public EventCallback OnModalClosed { get; set; }
+    [Parameter] public EventCallback OnCardAssigned { get; set; }
+
+    private IEnumerable<Employee>? unassignedEmployees;
+    private Guid selectedEmployeeId = Guid.Empty;
+    private bool grantAccess = true;
+    private string? cardInput;
+
+    protected override void OnParametersSet()
+    {
+        if (ShowModal)
+        {
+            LoadUnassignedEmployees();
+            // Pre-fill input when CardId is provided
+            cardInput = CardId?.Trim();
+        }
+    }
+
+    private void LoadUnassignedEmployees()
+    {
+        unassignedEmployees = EmployeeService.GetUnassignedEmployees();
+    }
+
+    private async Task AssignCard()
+    {
+        var effectiveCard = GetEffectiveCardId();
+        if (selectedEmployeeId == Guid.Empty || string.IsNullOrEmpty(effectiveCard))
+            return;
+
+        try
+        {
+            var normalized = effectiveCard!.Trim();
+            var employee = EmployeeService.AssignCardToEmployee(selectedEmployeeId, normalized, grantAccess);
+            if (employee != null)
+            {
+                await JSRuntime.InvokeVoidAsync("alert",
+                $"Card {normalized} successfully assigned to {employee.FullName}");
+                await OnCardAssigned.InvokeAsync();
+                await CloseModal();
+            }
+        }
+        catch (InvalidOperationException ex)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", ex.Message);
+        }
+    }
+
+    private string? GetEffectiveCardId()
+    {
+        return string.IsNullOrWhiteSpace(CardId) ? (cardInput ?? string.Empty).Trim() : CardId.Trim();
+    }
+
+    private async Task CloseModal()
+    {
+        selectedEmployeeId = Guid.Empty;
+        grantAccess = true;
+        cardInput = null;
+        await OnModalClosed.InvokeAsync();
+    }
+}

@@ -1,0 +1,124 @@
+# ===== .NET / Visual Studio =====
+# Build results
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+out/
+artifacts/
+
+# Visual Studio cache/options
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Rider/JetBrains/Resharper
+.idea/
+*.sln.iml
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.DotSettings.user
+
+# MonoDevelop/Xamarin
+*.userprefs
+
+# NuGet
+*.nupkg
+*.snupkg
+*.nuspec
+*.nuget.props
+*.nuget.targets
+packages/
+project.lock.json
+project.fragment.lock.json
+.nuget/
+
+# Test results / coverage
+[Tt]est[Rr]esult*/
+*.trx
+*.coverage
+*.coveragexml
+coverage/
+coverage*.json
+lcov.info
+
+# Logs and diagnostics
+*.log
+*.svclog
+*.tlog
+
+# Database files (local dev)
+*.mdf
+*.ldf
+*.ndf
+*.sqlite
+*.sqlite3
+*.db
+*.db3
+*.db-shm
+*.db-wal
+*.sdf
+
+# ASP.NET / Blazor static assets (optional)
+# Ignore library manager restored libs; remove if you commit wwwroot/libs
+wwwroot/lib/
+
+# Configuration variants (keep base appsettings.json tracked)
+appsettings.*.Local.json
+appsettings.*.local.json
+
+# Environment files / secrets
+.env
+.env.*
+*.secret
+*.secrets
+
+# Publish profiles (user-specific)
+**/*.pubxml.user
+
+# Deployment artifacts
+publish/
+dist/
+
+# OS specific
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Icon?
+$RECYCLE.BIN/
+
+# Editor folders
+.vscode/*
+!.vscode/extensions.json
+
+# Node (if used for tooling)
+node_modules/
+
+# Sonar / scanners
+.sonar/
+.scannerwork/
+
+# Other caches
+*.Cache/
+.cache/
+
+# Temporary / backup files
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+*.orig
+
+# TFS
+$tf/
+
+# Misc
+*.stackdump
+
+# Rider local history
+.idea/.idea.*
+
+# End of file

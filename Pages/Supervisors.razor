@@ -1,0 +1,353 @@
+@page "/supervisors"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using TimeEvidence.Services
+@using TimeEvidence.Models
+@inject EmployeeService EmployeeService
+@inject IJSRuntime JSRuntime
+@inject NavigationManager Navigation
+
+<PageTitle>Supervisor Management</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Supervisor Management</h1>
+    <div>
+        <button class="btn btn-outline-secondary me-2" @onclick="GoBack">
+            <i class="fas fa-arrow-left"></i> Go Back
+        </button>
+        <button class="btn btn-primary" @onclick="ShowAddSupervisorModal">
+            <i class="fas fa-plus"></i> Add Supervisor
+        </button>
+    </div>
+</div>
+
+@if (supervisors != null && supervisors.Any())
+{
+    <div class="row">
+        @foreach (var supervisor in supervisors)
+        {
+            <div class="col-md-6 col-lg-4 mb-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">@supervisor.FullName</h5>
+                        <h6 class="card-subtitle mb-2 text-muted">@supervisor.Position</h6>
+                        <p class="card-text">
+                            <i class="fas fa-envelope"></i> @supervisor.Email
+                        </p>
+                        @if (!string.IsNullOrWhiteSpace(supervisor.PhoneNumber))
+                        {
+                            <p class="card-text">
+                                <i class="fas fa-phone"></i> @supervisor.PhoneNumber
+                            </p>
+                        }
+                        <p class="card-text">
+                            <span class="badge bg-secondary">@supervisor.NotificationPreference</span>
+                        </p>
+                        <p class="card-text">
+                            <small class="text-muted">
+                                <i class="fas fa-users"></i>
+                                @GetEmployeeCount(supervisor.Id) employee(s)
+                            </small>
+                        </p>
+                        <p class="card-text">
+                            <small class="text-muted">
+                                Created: @supervisor.CreatedAt.ToString("MMM dd, yyyy")
+                            </small>
+                        </p>
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <button class="btn btn-outline-primary btn-sm" @onclick="() => EditSupervisor(supervisor)">
+                                <i class="fas fa-edit"></i> Edit
+                            </button>
+                            <button class="btn btn-outline-danger btn-sm" @onclick="() => DeleteSupervisor(supervisor)">
+                                <i class="fas fa-trash"></i> Delete
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+else
+{
+    <div class="alert alert-info">
+        <h4><i class="fas fa-info-circle"></i> No Supervisors Found</h4>
+        <p>Click "Add Supervisor" to create your first supervisor record.</p>
+    </div>
+}
+
+<!-- Add Supervisor Modal -->
+@if (showAddSupervisorModal)
+{
+    <div class="modal show d-block" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Add New Supervisor</h5>
+                    <button type="button" class="btn-close" @onclick="CloseModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">First Name *</label>
+                            <input type="text" class="form-control" @bind="newSupervisor.Name" />
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Last Name *</label>
+                            <input type="text" class="form-control" @bind="newSupervisor.Surname" />
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Position</label>
+                        <input type="text" class="form-control" @bind="newSupervisor.Position" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Email Address *</label>
+                        <input type="email" class="form-control" @bind="newSupervisor.Email" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Phone Number</label>
+                        <input type="tel" class="form-control" @bind="newSupervisor.PhoneNumber" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Notification Preference</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" id="prefNone" name="prefAdd"
+                                @onchange="() => newSupervisor.NotificationPreference = NotificationPreference.None"
+                                checked="@((newSupervisor.NotificationPreference == NotificationPreference.None))" />
+                            <label class="form-check-label" for="prefNone">None</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" id="prefEmail" name="prefAdd"
+                                @onchange="() => newSupervisor.NotificationPreference = NotificationPreference.Email"
+                                checked="@((newSupervisor.NotificationPreference == NotificationPreference.Email))" />
+                            <label class="form-check-label" for="prefEmail">Email</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" id="prefSms" name="prefAdd"
+                                @onchange="() => newSupervisor.NotificationPreference = NotificationPreference.Sms"
+                                checked="@((newSupervisor.NotificationPreference == NotificationPreference.Sms))" />
+                            <label class="form-check-label" for="prefSms">SMS</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseModal">Cancel</button>
+                    <button type="button" class="btn btn-primary" @onclick="AddSupervisor">Add Supervisor</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop show"></div>
+}
+
+<!-- Edit Supervisor Modal -->
+@if (showEditSupervisorModal && editingSupervisor != null)
+{
+    <div class="modal show d-block" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Edit Supervisor</h5>
+                    <button type="button" class="btn-close" @onclick="CloseEditModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">First Name *</label>
+                            <input type="text" class="form-control" @bind="editingSupervisor.Name" />
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Last Name *</label>
+                            <input type="text" class="form-control" @bind="editingSupervisor.Surname" />
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Position</label>
+                        <input type="text" class="form-control" @bind="editingSupervisor.Position" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Email Address *</label>
+                        <input type="email" class="form-control" @bind="editingSupervisor.Email" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Phone Number</label>
+                        <input type="tel" class="form-control" @bind="editingSupervisor.PhoneNumber" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Notification Preference</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" id="prefNoneEdit" name="prefEdit"
+                                @onchange="() => editingSupervisor.NotificationPreference = NotificationPreference.None"
+                                checked="@((editingSupervisor.NotificationPreference == NotificationPreference.None))" />
+                            <label class="form-check-label" for="prefNoneEdit">None</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" id="prefEmailEdit" name="prefEdit"
+                                @onchange="() => editingSupervisor.NotificationPreference = NotificationPreference.Email"
+                                checked="@((editingSupervisor.NotificationPreference == NotificationPreference.Email))" />
+                            <label class="form-check-label" for="prefEmailEdit">Email</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" id="prefSmsEdit" name="prefEdit"
+                                @onchange="() => editingSupervisor.NotificationPreference = NotificationPreference.Sms"
+                                checked="@((editingSupervisor.NotificationPreference == NotificationPreference.Sms))" />
+                            <label class="form-check-label" for="prefSmsEdit">SMS</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseEditModal">Cancel</button>
+                    <button type="button" class="btn btn-primary" @onclick="UpdateSupervisor">Update Supervisor</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop show"></div>
+}
+
+@code {
+    private IEnumerable<Supervisor>? supervisors;
+    private IEnumerable<Employee>? employees;
+    private bool showAddSupervisorModal = false;
+    private bool showEditSupervisorModal = false;
+    private Supervisor newSupervisor = new Supervisor();
+    private Supervisor? editingSupervisor;
+
+    protected override void OnInitialized()
+    {
+        RefreshData();
+    }
+
+    private void RefreshData()
+    {
+        supervisors = EmployeeService.GetAllSupervisors();
+        employees = EmployeeService.GetAllEmployees();
+    }
+
+    private int GetEmployeeCount(Guid supervisorId)
+    {
+        return employees?.Count(e => e.SupervisorId == supervisorId) ?? 0;
+    }
+
+    private void ShowAddSupervisorModal()
+    {
+        newSupervisor = new Supervisor { Position = "Manager", NotificationPreference = NotificationPreference.None };
+        showAddSupervisorModal = true;
+    }
+
+    private void CloseModal()
+    {
+        showAddSupervisorModal = false;
+        newSupervisor = new Supervisor();
+    }
+
+    private async Task AddSupervisor()
+    {
+        if (string.IsNullOrWhiteSpace(newSupervisor.Name) ||
+        string.IsNullOrWhiteSpace(newSupervisor.Surname) ||
+        string.IsNullOrWhiteSpace(newSupervisor.Email))
+        {
+            await JSRuntime.InvokeVoidAsync("alert", "Please fill in all required fields");
+            return;
+        }
+
+        if (!IsValidEmail(newSupervisor.Email))
+        {
+            await JSRuntime.InvokeVoidAsync("alert", "Please enter a valid email address");
+            return;
+        }
+
+        var result = EmployeeService.CreateSupervisor(newSupervisor);
+        await JSRuntime.InvokeVoidAsync("alert", $"Supervisor {result.FullName} created successfully");
+        RefreshData();
+        CloseModal();
+    }
+
+    private bool IsValidEmail(string email)
+    {
+        try
+        {
+            var addr = new System.Net.Mail.MailAddress(email);
+            return addr.Address == email;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private void EditSupervisor(Supervisor supervisor)
+    {
+        editingSupervisor = new Supervisor
+        {
+            Id = supervisor.Id,
+            Name = supervisor.Name,
+            Surname = supervisor.Surname,
+            Position = supervisor.Position,
+            Email = supervisor.Email,
+            PhoneNumber = supervisor.PhoneNumber,
+            NotificationPreference = supervisor.NotificationPreference,
+            CreatedAt = supervisor.CreatedAt,
+            UpdatedAt = supervisor.UpdatedAt
+        };
+        showEditSupervisorModal = true;
+    }
+
+    private void CloseEditModal()
+    {
+        showEditSupervisorModal = false;
+        editingSupervisor = null;
+    }
+
+    private async Task UpdateSupervisor()
+    {
+        if (editingSupervisor == null) return;
+
+        if (string.IsNullOrWhiteSpace(editingSupervisor.Name) ||
+        string.IsNullOrWhiteSpace(editingSupervisor.Surname) ||
+        string.IsNullOrWhiteSpace(editingSupervisor.Email))
+        {
+            await JSRuntime.InvokeVoidAsync("alert", "Please fill in all required fields");
+            return;
+        }
+
+        if (!IsValidEmail(editingSupervisor.Email))
+        {
+            await JSRuntime.InvokeVoidAsync("alert", "Please enter a valid email address");
+            return;
+        }
+
+        var result = EmployeeService.UpdateSupervisor(editingSupervisor);
+        if (result != null)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Supervisor {result.FullName} updated successfully");
+            RefreshData();
+            CloseEditModal();
+        }
+        else
+        {
+            await JSRuntime.InvokeVoidAsync("alert", "Error updating supervisor");
+        }
+    }
+
+    private async Task DeleteSupervisor(Supervisor supervisor)
+    {
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm",
+        $"Are you sure you want to delete supervisor {supervisor.FullName}?");
+
+        if (!confirmed) return;
+
+        var (success, message) = EmployeeService.DeleteSupervisor(supervisor.Id);
+        await JSRuntime.InvokeVoidAsync("alert", message);
+
+        if (success)
+        {
+            RefreshData();
+        }
+    }
+
+    private void GoBack()
+    {
+        Navigation.NavigateTo("/employees");
+    }
+}

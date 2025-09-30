@@ -1,0 +1,440 @@
+@page "/schedules"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using TimeEvidence.Services
+@using TimeEvidence.Models
+@inject EmployeeService EmployeeService
+@inject IJSRuntime JSRuntime
+@inject NavigationManager Navigation
+
+<PageTitle>Work Schedule Management</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Work Schedule Management</h1>
+    <div>
+        <button class="btn btn-outline-secondary me-2" @onclick="GoBack">
+            <i class="fas fa-arrow-left"></i> Go Back
+        </button>
+        <button class="btn btn-primary" @onclick="ShowAddScheduleModal">
+            <i class="fas fa-plus"></i> Add Schedule
+        </button>
+    </div>
+</div>
+
+@if (schedules != null && schedules.Any())
+{
+    <div class="row">
+        @foreach (var schedule in schedules)
+        {
+            <div class="col-md-6 col-lg-4 mb-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">@schedule.ScheduleName</h5>
+                        <div class="mb-3">
+                            <h6 class="text-muted">Working Days:</h6>
+                            <div class="d-flex flex-wrap gap-1">
+                                @foreach (var day in schedule.GetSelectedDays())
+                                {
+                                    <span class="badge bg-primary">@day.ToString().Substring(0, 3)</span>
+                                }
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <h6 class="text-muted">Time Ranges:</h6>
+                            @foreach (var timeRange in schedule.GetTimeRanges())
+                            {
+                                <div class="badge bg-info me-1 mb-1">@timeRange.DisplayText</div>
+                            }
+                        </div>
+                        <p class="card-text">
+                            <small class="text-muted">
+                                <i class="fas fa-users"></i>
+                                @GetEmployeeCount(schedule.Id) employee(s) assigned
+                            </small>
+                        </p>
+                        <p class="card-text">
+                            <small class="text-muted">
+                                Created: @schedule.CreatedAt.ToString("MMM dd, yyyy")
+                            </small>
+                        </p>
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <button class="btn btn-outline-primary btn-sm" @onclick="() => EditSchedule(schedule)">
+                                <i class="fas fa-edit"></i> Edit
+                            </button>
+                            <button class="btn btn-outline-danger btn-sm" @onclick="() => DeleteSchedule(schedule)">
+                                <i class="fas fa-trash"></i> Delete
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+else
+{
+    <div class="alert alert-info">
+        <h4><i class="fas fa-info-circle"></i> No Work Schedules Found</h4>
+        <p>Click "Add Schedule" to create your first work schedule.</p>
+    </div>
+}
+
+<!-- Add Schedule Modal -->
+@if (showAddScheduleModal)
+{
+    <div class="modal show d-block" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Add New Work Schedule</h5>
+                    <button type="button" class="btn-close" @onclick="CloseModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Schedule Name *</label>
+                        <input type="text" class="form-control" @bind="newSchedule.ScheduleName"
+                            placeholder="e.g., Standard Work Week" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Working Days *</label>
+                        <div class="row">
+                            @foreach (DayOfWeek day in Enum.GetValues<DayOfWeek>())
+                            {
+                                <div class="col-md-4 mb-2">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" checked="@selectedDays.Contains(day)"
+                                            @onchange="@((e) => ToggleDay(day, (bool)e.Value!))" />
+                                        <label class="form-check-label">@day</label>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Time Ranges</label>
+                        <div class="border rounded p-3">
+                            @foreach (var timeRange in timeRanges)
+                            {
+                                <div class="row mb-2 align-items-center">
+                                    <div class="col-md-4">
+                                        <input type="time" class="form-control" value="@timeRange.StartTime.ToString(@"hh\:mm")"
+                                            @onchange="@((e) => timeRange.StartTime = TimeSpan.Parse(e.Value?.ToString() ?? "09:00"))" />
+                                    </div>
+                                    <div class="col-md-1 text-center">to</div>
+                                    <div class="col-md-4">
+                                        <input type="time" class="form-control" value="@timeRange.EndTime.ToString(@"hh\:mm")"
+                                            @onchange="@((e) => timeRange.EndTime = TimeSpan.Parse(e.Value?.ToString() ?? "17:00"))" />
+                                    </div>
+                                    <div class="col-md-3">
+                                        <button type="button" class="btn btn-outline-danger btn-sm"
+                                            @onclick="() => RemoveTimeRange(timeRange)">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            }
+                            <button type="button" class="btn btn-outline-primary btn-sm" @onclick="AddTimeRange">
+                                <i class="fas fa-plus"></i> Add Time Range
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseModal">Cancel</button>
+                    <button type="button" class="btn btn-primary" @onclick="AddSchedule">Add Schedule</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop show"></div>
+}
+
+<!-- Edit Schedule Modal -->
+@if (showEditScheduleModal && editingSchedule != null)
+{
+    <div class="modal show d-block" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Edit Work Schedule</h5>
+                    <button type="button" class="btn-close" @onclick="CloseEditModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Schedule Name *</label>
+                        <input type="text" class="form-control" @bind="editingSchedule.ScheduleName"
+                            placeholder="e.g., Standard Work Week" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Working Days *</label>
+                        <div class="row">
+                            @foreach (DayOfWeek day in Enum.GetValues<DayOfWeek>())
+                            {
+                                <div class="col-md-4 mb-2">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox"
+                                            checked="@editSelectedDays.Contains(day)"
+                                            @onchange="@((e) => ToggleEditDay(day, (bool)e.Value!))" />
+                                        <label class="form-check-label">@day</label>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Time Ranges</label>
+                        <div class="border rounded p-3">
+                            @foreach (var timeRange in editTimeRanges)
+                            {
+                                <div class="row mb-2 align-items-center">
+                                    <div class="col-md-4">
+                                        <input type="time" class="form-control" value="@timeRange.StartTime.ToString(@"hh\:mm")"
+                                            @onchange="@((e) => timeRange.StartTime = TimeSpan.Parse(e.Value?.ToString() ?? "09:00"))" />
+                                    </div>
+                                    <div class="col-md-1 text-center">to</div>
+                                    <div class="col-md-4">
+                                        <input type="time" class="form-control" value="@timeRange.EndTime.ToString(@"hh\:mm")"
+                                            @onchange="@((e) => timeRange.EndTime = TimeSpan.Parse(e.Value?.ToString() ?? "17:00"))" />
+                                    </div>
+                                    <div class="col-md-3">
+                                        <button type="button" class="btn btn-outline-danger btn-sm"
+                                            @onclick="() => RemoveEditTimeRange(timeRange)">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            }
+                            <button type="button" class="btn btn-outline-primary btn-sm" @onclick="AddEditTimeRange">
+                                <i class="fas fa-plus"></i> Add Time Range
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseEditModal">Cancel</button>
+                    <button type="button" class="btn btn-primary" @onclick="UpdateSchedule">Update Schedule</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop show"></div>
+}
+
+@code {
+    private IEnumerable<WorkSchedule>? schedules;
+    private IEnumerable<Employee>? employees;
+    private bool showAddScheduleModal = false;
+    private bool showEditScheduleModal = false;
+    private WorkSchedule newSchedule = new WorkSchedule();
+    private WorkSchedule? editingSchedule;
+    private List<DayOfWeek> selectedDays = new List<DayOfWeek>();
+    private List<DayOfWeek> editSelectedDays = new List<DayOfWeek>();
+    private List<TimeRange> timeRanges = new List<TimeRange>();
+    private List<TimeRange> editTimeRanges = new List<TimeRange>();
+
+    protected override void OnInitialized()
+    {
+        RefreshData();
+    }
+
+    private void RefreshData()
+    {
+        schedules = EmployeeService.GetAllWorkSchedules();
+        employees = EmployeeService.GetAllEmployees();
+    }
+
+    private int GetEmployeeCount(Guid scheduleId)
+    {
+        return employees?.Count(e => e.WorkScheduleId == scheduleId) ?? 0;
+    }
+
+    private void ShowAddScheduleModal()
+    {
+        newSchedule = new WorkSchedule();
+        selectedDays = new List<DayOfWeek>
+{
+DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday,
+DayOfWeek.Thursday, DayOfWeek.Friday
+};
+        timeRanges = new List<TimeRange>
+{
+new TimeRange { StartTime = new TimeSpan(9, 0, 0), EndTime = new TimeSpan(17, 0, 0) }
+};
+        showAddScheduleModal = true;
+    }
+
+    private void CloseModal()
+    {
+        showAddScheduleModal = false;
+        newSchedule = new WorkSchedule();
+        selectedDays.Clear();
+        timeRanges.Clear();
+    }
+
+    private void ToggleDay(DayOfWeek day, bool isSelected)
+    {
+        if (isSelected && !selectedDays.Contains(day))
+        {
+            selectedDays.Add(day);
+        }
+        else if (!isSelected && selectedDays.Contains(day))
+        {
+            selectedDays.Remove(day);
+        }
+    }
+
+    private void AddTimeRange()
+    {
+        timeRanges.Add(new TimeRange
+        {
+            StartTime = new TimeSpan(9, 0, 0),
+            EndTime = new TimeSpan(17, 0, 0)
+        });
+    }
+
+    private void RemoveTimeRange(TimeRange timeRange)
+    {
+        timeRanges.Remove(timeRange);
+    }
+
+    private async Task AddSchedule()
+    {
+        if (string.IsNullOrWhiteSpace(newSchedule.ScheduleName))
+        {
+            await JSRuntime.InvokeVoidAsync("alert", "Please enter a schedule name");
+            return;
+        }
+
+        if (!selectedDays.Any())
+        {
+            await JSRuntime.InvokeVoidAsync("alert", "Please select at least one working day");
+            return;
+        }
+
+        if (!timeRanges.Any())
+        {
+            await JSRuntime.InvokeVoidAsync("alert", "Please add at least one time range");
+            return;
+        }
+
+        newSchedule.SetSelectedDays(selectedDays);
+        newSchedule.SetTimeRanges(timeRanges);
+
+        var result = EmployeeService.CreateWorkSchedule(newSchedule);
+        await JSRuntime.InvokeVoidAsync("alert", $"Work schedule '{result.ScheduleName}' created successfully");
+        RefreshData();
+        CloseModal();
+    }
+
+    private void EditSchedule(WorkSchedule schedule)
+    {
+        editingSchedule = new WorkSchedule
+        {
+            Id = schedule.Id,
+            ScheduleName = schedule.ScheduleName,
+            SelectedDays = schedule.SelectedDays,
+            TimeRanges = schedule.TimeRanges,
+            CreatedAt = schedule.CreatedAt,
+            UpdatedAt = schedule.UpdatedAt
+        };
+        editSelectedDays = schedule.GetSelectedDays().ToList();
+        editTimeRanges = schedule.GetTimeRanges().ToList();
+        showEditScheduleModal = true;
+    }
+
+    private void CloseEditModal()
+    {
+        showEditScheduleModal = false;
+        editingSchedule = null;
+        editSelectedDays.Clear();
+        editTimeRanges.Clear();
+    }
+
+    private void ToggleEditDay(DayOfWeek day, bool isSelected)
+    {
+        if (isSelected && !editSelectedDays.Contains(day))
+        {
+            editSelectedDays.Add(day);
+        }
+        else if (!isSelected && editSelectedDays.Contains(day))
+        {
+            editSelectedDays.Remove(day);
+        }
+    }
+
+    private void AddEditTimeRange()
+    {
+        editTimeRanges.Add(new TimeRange
+        {
+            StartTime = new TimeSpan(9, 0, 0),
+            EndTime = new TimeSpan(17, 0, 0)
+        });
+    }
+
+    private void RemoveEditTimeRange(TimeRange timeRange)
+    {
+        editTimeRanges.Remove(timeRange);
+    }
+
+    private async Task UpdateSchedule()
+    {
+        if (editingSchedule == null) return;
+
+        if (string.IsNullOrWhiteSpace(editingSchedule.ScheduleName))
+        {
+            await JSRuntime.InvokeVoidAsync("alert", "Please enter a schedule name");
+            return;
+        }
+
+        if (!editSelectedDays.Any())
+        {
+            await JSRuntime.InvokeVoidAsync("alert", "Please select at least one working day");
+            return;
+        }
+
+        if (!editTimeRanges.Any())
+        {
+            await JSRuntime.InvokeVoidAsync("alert", "Please add at least one time range");
+            return;
+        }
+
+        editingSchedule.SetSelectedDays(editSelectedDays);
+        editingSchedule.SetTimeRanges(editTimeRanges);
+
+        var result = EmployeeService.UpdateWorkSchedule(editingSchedule);
+        if (result != null)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Work schedule '{result.ScheduleName}' updated successfully");
+            RefreshData();
+            CloseEditModal();
+        }
+        else
+        {
+            await JSRuntime.InvokeVoidAsync("alert", "Error updating work schedule");
+        }
+    }
+
+    private async Task DeleteSchedule(WorkSchedule schedule)
+    {
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm",
+        $"Are you sure you want to delete work schedule '{schedule.ScheduleName}'?");
+
+        if (!confirmed) return;
+
+        var (success, message) = EmployeeService.DeleteWorkSchedule(schedule.Id);
+        await JSRuntime.InvokeVoidAsync("alert", message);
+
+        if (success)
+        {
+            RefreshData();
+        }
+    }
+
+    private void GoBack()
+    {
+        Navigation.NavigateTo("/employees");
+    }
+}

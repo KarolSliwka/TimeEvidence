@@ -1,0 +1,51 @@
+@using TimeEvidence.Services
+@using TimeEvidence.Models
+@inject TimeTrackerDataService TimeTrackerService
+
+<div class="row mb-3">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">System Statistics</h5>
+                <p class="card-text">Total Records: <strong>@TimeTrackerService.GetDataCount()</strong></p>
+                <p class="card-text">Active Sessions: <strong>@TimeTrackerService.GetActiveSessionsCount()</strong></p>
+                <p class="card-text">Last Updated: <strong>@(LatestData?.ReceivedTimestamp.ToString("yyyy-MM-dd HH:mm:ss") ??
+                                                "No data")</strong></p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Actions</h5>
+                <button class="btn btn-primary me-2" @onclick="OnRefresh">
+                    <i class="fas fa-sync-alt"></i> Refresh
+                </button>
+                <button class="btn btn-warning" @onclick="OnClearData">
+                    <i class="fas fa-trash"></i> Clear All Data
+                </button>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Quick Assign</h5>
+                <button class="btn btn-success" @onclick="OnShowAssignCard">
+                    <i class="fas fa-credit-card"></i> Assign Card
+                </button>
+                <button class="btn btn-info ms-2" @onclick="OnManageEmployees">
+                    <i class="fas fa-users"></i> Manage
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public TimeTrackerData? LatestData { get; set; }
+    [Parameter] public EventCallback OnRefresh { get; set; }
+    [Parameter] public EventCallback OnClearData { get; set; }
+    [Parameter] public EventCallback OnShowAssignCard { get; set; }
+    [Parameter] public EventCallback OnManageEmployees { get; set; }
+}

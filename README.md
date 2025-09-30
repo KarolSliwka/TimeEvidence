@@ -1,152 +1,131 @@
 # Time Evidence Tracker
 
-A .NET Blazor Server application that receives JSON data from time tracking systems and displays employee login/logout activities in a real-time table format.
+Production-ready Blazor Server app (ASP.NET Core 6 + EF Core + SQLite) for collecting time tracking events (badge scans), validating access against employee schedules, and visualizing activity in real time.
 
-## Features
+## Highlights
 
-- **Real-time Data Display**: Automatically refreshes every 5 seconds to show the latest time tracking activities
-- **REST API Endpoints**: Receive JSON data from time tracking systems via HTTP POST requests
-- **Responsive Table View**: Display employee login/logout data in a clean, organized table format
-- **Data Management**: View, refresh, and clear collected data
-- **Session Tracking**: Monitor active sessions and system status
-- **Card ID Support**: Track employee activities by card/badge ID
+- Real-time dashboard: new events appear instantly with a subtle indicator
+- Solid auth: cookie-based UI login, API key for all `/api/*` routes
+- Clean domain model: normalized employees, card assignments, and work schedules
+- Automated notifications: late arrivals and early logouts (pluggable SMS via SMSAPI)
+- Persistent storage: EF Core + SQLite (`timeevidence.db`), last 50 records shown for perf
 
-## Getting Started
+## Tech stack
 
-### Prerequisites
+- Blazor Server (.NET 6)
+- ASP.NET Core Authentication (Cookies + custom API Key)
+- Entity Framework Core + SQLite
+- Minimal, DI-first services (`TimeTrackerDataService`, `EmployeeService`, `NotificationService`)
+
+## Quick start
+
+Prerequisites:
+- .NET 6 SDK
+
+Run locally:
+
+```bash
+# optional: set UI credentials (fallback to appsettings Auth:Username/Password)
+export AUTH__USERNAME=admin
+export AUTH__PASSWORD=admin
+
+# for local dev, API auth is disabled by default via launchSettings; to require:
+export Api__RequireAuth=true
+export Api__Key="<your-strong-api-key>"
+
+dotnet run
+```
+
+Open:
+- UI: https://localhost:7157 or http://localhost:5103
+- Login at /login (cookie auth). After login, you’ll see the live dashboard.
+
+Tip (VS Code): there’s a task named "run" you can start from the Run Task menu.
 
 ## Authentication
 
-This app is secured by login for all UI pages. APIs remain protected by API Key.
-
-- UI login path: `/login`
-- Default credentials (override via environment variables `AUTH__USERNAME` and `AUTH__PASSWORD` or appsettings `Auth:Username`, `Auth:Password`):
-  - Username: `admin`
-  - Password: `admin123`
-
-API endpoints require an API key using the `X-Api-Key` header or `Authorization: ApiKey <key>`.
-Configure via environment variables `Api__Key` or `API_KEY`, or `appsettings.json` under `Api:Key`.
-
-
-- .NET 6.0 or later
-- Visual Studio Code or Visual Studio
-
-### Running the Application
-
-1. **Build the project:**
-   ```bash
-   dotnet build
-   ```
-
-2. **Run the application:**
-   ```bash
-   dotnet run
-   ```
-
-3. **Access the application:**
-   - Open your browser and navigate to `https://localhost:7157` or `http://localhost:5103`
-   - The main page will show the Arduino data monitor
-
-## API Endpoints
-
-### Send Time Tracking Data
-
-**POST** `/api/timetracker/data`
-
-Send JSON data from your time tracking system to this endpoint.
-
-**Example JSON structure:**
-```json
-{
-  "system_id": "TIME_TRACKER_01",
-  "action": "LOGIN",
-  "card_id": "F3222711", 
-  "status": "SUCCESS",
-  "timestamp_iso": "2025-10-14T22:05:12+02:00",
-  "timestamp_local": "22:05:12",
-  "active_sessions": 1,
-  "system_uptime": 35372,
-  "wifi_connected": true
-}
-```
-
-### Get All Data
-
-**GET** `/api/timetracker/data`
-
-Retrieve all stored time tracking data.
-
-### Get Latest Data
-
-**GET** `/api/timetracker/data/latest`
-
-Get the most recent data entry.
-
-### Get Data by Action
-
-**GET** `/api/timetracker/data/action/{action}`
-
-Get data filtered by action (LOGIN, LOGOUT, etc.).
-
-### Get Data by System
-
-**GET** `/api/timetracker/data/system/{systemId}`
-
-Get data filtered by system ID.
-
-### Get Statistics
-
-**GET** `/api/timetracker/stats`
-
-Get system statistics including active sessions and totals.
-
-### Clear All Data
-
-**DELETE** `/api/timetracker/data`
-
-Remove all stored data.
-
-## API Authentication
-
-All API endpoints under `/api/*` are protected with an API key when running in production. Blazor UI remains publicly accessible unless you add additional auth.
-
-Configure the API key via environment variables (preferred):
-
-- `Api__Key` (recommended; hierarchical)
-- `API_KEY` (flat alias)
-
-You can also set `Api:RequireAuth` to false to disable protection (not recommended except for local dev):
-
-- `Api__RequireAuth=false`
+- UI (Blazor pages): protected by cookie login
+  - Login path: `/login`
+  - Credentials via env or appsettings: `AUTH__USERNAME`, `AUTH__PASSWORD` or `Auth:Username`, `Auth:Password`
+- API: protected by API key (enabled when `Api__RequireAuth=true`)
+  - Send `X-Api-Key: <key>` or `Authorization: ApiKey <key>`
+  - Configure via `Api__Key` (preferred), `API_KEY`, or `Api:Key` in appsettings
 
 Example (bash):
 
 ```bash
-export Api__Key="<your-strong-key>"
 export Api__RequireAuth=true
+export Api__Key="<your-strong-api-key>"
 dotnet run
 ```
 
-Example request:
+## API reference
 
+Base URL: `/api/timetracker`
+
+- POST `/data` – ingest a time-tracker event
+- GET `/data` – latest 50 records (descending)
+- GET `/data/latest` – most recent record
+- GET `/data/action/{action}` – filter by action (e.g., LOGIN, LOGOUT)
+- GET `/data/system/{systemId}` – filter by device/system
+- GET `/stats` – counters + last seen metadata
+- DELETE `/data` – clear all data
+
+### Example: send an event (curl)
+
+```bash
+curl -X POST "http://localhost:5103/api/timetracker/data" \
+  -H "Content-Type: application/json" \
+  -H "X-Api-Key: <your-strong-api-key>" \
+  -d '{
+    "system_id": "TIME_TRACKER_01",
+    "action": "LOGIN",
+    "card_id": "F3222711",
+    "status": "SUCCESS",
+    "timestamp_iso": "2025-10-14T22:05:12+02:00",
+    "timestamp_local": "22:05:12",
+    "active_sessions": 1,
+    "system_uptime": 35372,
+    "wifi_connected": true
+  }'
 ```
-POST /api/timetracker/data HTTP/1.1
-Host: yourserver
-Content-Type: application/json
-X-Api-Key: <your-strong-key>
 
-{ ...json body... }
+Response (Arduino-friendly):
+
+```json
+{
+  "message": "Data received successfully",
+  "access_granted": true,
+  "employee_name": "Jane",
+  "employee_surname": "Doe",
+  "position": "Operator",
+  "access_level": "Authorized",
+  "timestamp": "2025-10-14T20:05:13.123Z",
+  "system_message": "Have a nice day!"
+}
 ```
 
-Alternatively, use the Authorization header:
+### Example: C# client
 
+```csharp
+using System.Net.Http;
+using System.Net.Http.Json;
+
+var http = new HttpClient { BaseAddress = new Uri("http://localhost:5103") };
+http.DefaultRequestHeaders.Add("X-Api-Key", "<your-strong-api-key>");
+
+var payload = new {
+    system_id = "TIME_TRACKER_01",
+    action = "LOGIN",
+    card_id = "F3222711",
+    timestamp_iso = DateTimeOffset.Now.ToString("O")
+};
+
+var res = await http.PostAsJsonAsync("/api/timetracker/data", payload);
+res.EnsureSuccessStatusCode();
 ```
-Authorization: ApiKey <your-strong-key>
-```
 
-## Arduino Example Code
-
-Here's a simple example of how to send data from an Arduino with WiFi capability:
+### Arduino/ESP example
 
 ```cpp
 #include <WiFi.h>
@@ -155,18 +134,12 @@ Here's a simple example of how to send data from an Arduino with WiFi capability
 
 const char* ssid = "your-wifi-ssid";
 const char* password = "your-wifi-password";
-const char* serverURL = "http://localhost:5103/api/arduino/data";
+const char* serverURL = "http://localhost:5103/api/timetracker/data";
 
 void setup() {
   Serial.begin(115200);
   WiFi.begin(ssid, password);
-  
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(1000);
-    Serial.println("Connecting to WiFi...");
-  }
-  
-  Serial.println("Connected to WiFi");
+  while (WiFi.status() != WL_CONNECTED) { delay(500); }
 }
 
 void loop() {
@@ -174,110 +147,126 @@ void loop() {
     HTTPClient http;
     http.begin(serverURL);
     http.addHeader("Content-Type", "application/json");
-    
-    // Create JSON data
-    DynamicJsonDocument doc(1024);
-    doc["deviceId"] = "Arduino_001";
-    doc["temperature"] = 23.5;
-    doc["humidity"] = 65.2;
-    doc["lightLevel"] = 450;
-    doc["motionDetected"] = false;
-    doc["status"] = "active";
-    
-    String jsonString;
-    serializeJson(doc, jsonString);
-    
-    int httpResponseCode = http.POST(jsonString);
-    
-    if (httpResponseCode > 0) {
-      Serial.print("HTTP Response: ");
-      Serial.println(httpResponseCode);
-    }
-    
+    http.addHeader("X-Api-Key", "<your-strong-api-key>");
+
+    DynamicJsonDocument doc(512);
+    doc["system_id"] = "ESP32_GATE";
+    doc["action"] = "LOGIN";
+    doc["card_id"] = "F3222711";
+    doc["timestamp_iso"] = "2025-10-14T22:05:12+02:00";
+
+    String body;
+    serializeJson(doc, body);
+    int code = http.POST(body);
+    Serial.printf("HTTP %d\n", code);
     http.end();
   }
-  
-  delay(5000); // Send data every 5 seconds
+  delay(5000);
 }
 ```
 
-## Project Structure
+## Data model (core entity)
 
+`TimeEvidence.Models.TimeTrackerData` maps cleanly to incoming JSON via `JsonPropertyName` and enriches it with computed properties and access resolution.
+
+```csharp
+public class TimeTrackerData
+{
+    public int Id { get; set; }
+    public string? SystemId { get; set; }            // system_id
+    public string? Action { get; set; }              // action (LOGIN/LOGOUT)
+    public string? CardId { get; set; }              // card_id
+    public string? Status { get; set; }              // server-side access/schedule result
+    public string? TimestampIso { get; set; }        // timestamp_iso
+    public string? TimestampLocal { get; set; }      // timestamp_local
+    public int? ActiveSessions { get; set; }         // active_sessions
+    public long? SystemUptime { get; set; }          // system_uptime (sec)
+    public bool? WifiConnected { get; set; }         // wifi_connected
+    public DateTime ReceivedTimestamp { get; set; }  // set on ingest
+
+    // employee resolution
+    public Guid? AssignedEmployeeId { get; set; }
+    public string? EmployeeName { get; set; }
+    public string? AccessLevel { get; set; }         // Authorized/Unauthorized/Unknown
+
+    // convenience
+    public DateTime? ParsedTimestamp => DateTime.TryParse(TimestampIso, out var dt) ? dt : null;
+    public string UptimeFormatted => SystemUptime.HasValue ? TimeSpan.FromSeconds(SystemUptime.Value).ToString(@"dd\.hh\:mm\:ss") : "N/A";
+    public bool IsAuthorized => AccessLevel == "Authorized";
+}
 ```
-TimeEvidence/
-├── Controllers/
-│   └── ArduinoController.cs    # API endpoints for receiving data
-├── Models/
-│   └── ArduinoData.cs          # Data model for Arduino sensor data
-├── Services/
-│   └── ArduinoDataService.cs   # Service for managing data storage
-├── Pages/
-│   └── Index.razor             # Main page with data table
-├── Shared/
-│   ├── MainLayout.razor        # Layout template
-│   └── NavMenu.razor           # Navigation menu
-└── Program.cs                  # Application configuration
-```
 
-## Data Fields
+How it works:
+1) Controller stores the event, enriches it (employee lookup, access level, schedule validation)
+2) Blazor components subscribe to service events to refresh the table instantly
+3) Optional SMS notifications fire for late arrivals / early logouts
 
-The application supports the following data fields from Arduino devices:
+## UI features
 
-- **DeviceId**: Unique identifier for the Arduino device
-- **Temperature**: Temperature sensor reading (°C)
-- **Humidity**: Humidity sensor reading (%)
-- **LightLevel**: Light sensor reading
-- **MotionDetected**: Boolean indicating motion detection
-- **Status**: Custom status string
-- **Timestamp**: Automatically added when data is received
-- **AdditionalData**: Dictionary for custom sensor data
+- Dashboard cards with latest status and quick actions (refresh, clear, assign card, manage employees)
+- Time-tracker table with card assignment shortcut and access indicators
+- Auto-refresh backup every 10 seconds in addition to real-time events
 
-## Development
+## Configuration
 
-To modify or extend the application:
+The app reads configuration from `appsettings.json`, `appsettings.{Environment}.json`, and environment variables. Prefer env vars for secrets.
 
-1. **Add new sensor types**: Update the `ArduinoData` model in `Models/ArduinoData.cs`
-2. **Customize the display**: Modify the table in `Pages/Index.razor`
-3. **Add new API endpoints**: Extend the `ArduinoController`
-4. **Change data storage**: Modify or replace the `ArduinoDataService`
+- UI auth: `AUTH__USERNAME`, `AUTH__PASSWORD` (or `Auth:Username`, `Auth:Password`)
+- API key: `Api__RequireAuth` (true/false), `Api__Key` (or `API_KEY`)
+- Database: `ConnectionStrings:DefaultConnection` (SQLite by default)
+- SMS (SMSAPI):
+  - `Sms__SMSAPI__AccessToken` or `SMSAPI_ACCESS_TOKEN`
+  - `Sms__SMSAPI__From` or `SMSAPI_FROM`
 
-## Notes
-
-- Data is stored in memory and will be lost when the application restarts
-- For production use, consider implementing persistent storage (database)
-- The application auto-refreshes the display every 5 seconds
-- Only the latest 50 records are shown in the table for performance
-
-## Configuration: SMTP and SMS
-
-The app reads configuration from `appsettings.json`, `appsettings.{Environment}.json`, and environment variables. For sensitive values like SMS API tokens, prefer environment variables.
-
-### SMS (SMSAPI)
-
-Set the SMSAPI access token via one of the following environment variables (first non-empty wins):
-
-- `Sms__SMSAPI__AccessToken` (recommended; hierarchical format)
-- `SMSAPI_ACCESS_TOKEN` (flat alias)
-
-Optional sender name/number can be set via:
-
-- `Sms__SMSAPI__From`
-- `SMSAPI_FROM`
-
-Example (PowerShell):
+Windows PowerShell examples:
 
 ```powershell
-$env:Sms__SMSAPI__AccessToken = "<your-token>"
-$env:Sms__SMSAPI__From = "MyCompany"
+$env:AUTH__USERNAME = "admin"
+$env:AUTH__PASSWORD = "admin"
+$env:Api__RequireAuth = "true"
+$env:Api__Key = "<your-strong-api-key>"
 dotnet run
 ```
 
-Example (bash):
+Windows bash (Git Bash) examples:
 
 ```bash
-export Sms__SMSAPI__AccessToken="<your-token>"
-export Sms__SMSAPI__From="MyCompany"
+export AUTH__USERNAME=admin
+export AUTH__PASSWORD=admin
+export Api__RequireAuth=true
+export Api__Key="<your-strong-api-key>"
 dotnet run
 ```
 
-In `appsettings.json`, leave `Sms:SMSAPI:AccessToken` empty to avoid committing secrets.# TimeEvidence
+## Project structure (key files)
+
+```
+Controllers/
+  ArduinoController.cs        # TimeTrackerController: /api/timetracker endpoints
+Models/
+  ArduinoData.cs             # TimeTrackerData entity + JSON mapping
+  DTOs/ArduinoResponseDto.cs # API response for devices
+Services/
+  TimeTrackerDataService.cs  # EF Core access, events, schedule validation, notifications
+  EmployeeService.cs         # Employees and card assignments
+  NotificationService.cs     # SMS notifications (SMSAPI)
+Pages/
+  Index.razor                # Real-time dashboard (authorized)
+Program.cs                   # DI, auth (Cookies + ApiKey), EF Core (SQLite)
+```
+
+## Recruiter notes
+
+- Custom multi-auth setup: PolicyScheme chooses API Key for API calls, Cookies for UI
+- Event-driven UI updates without SignalR boilerplate (service events consumed by Blazor)
+- Secure key handling with constant-time comparison, flexible headers (`X-Api-Key` or `Authorization`)
+- Pragmatic persistence: SQLite for local dev; easily swappable via connection string
+
+## Maintenance
+
+- Database is created automatically at startup; to reset, stop the app and delete `timeevidence.db`
+- Only the latest 50 records are displayed for performance; adjust in `TimeTrackerDataService.GetAllData()`
+
+---
+
+If you’d like a quick walkthrough during an interview, start from `Program.cs` (auth + DI), then `TimeTrackerController`, and finally the dashboard in `Pages/Index.razor`.

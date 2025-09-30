@@ -1,0 +1,72 @@
+@using TimeEvidence.Models
+@using TimeEvidence.Services
+@inject EmployeeService EmployeeService
+@inject NotificationService NotificationService
+@inject IJSRuntime JS
+
+<div class="row g-2 align-items-end">
+    <div class="col-md-6">
+        <label class="form-label">Select employee</label>
+        <select class="form-select" @bind="selectedEmployeeId">
+            <option value="">-- choose employee --</option>
+            @foreach (var e in employees)
+            {
+                <option value="@e.Id">@e.FullName (@e.Position)</option>
+            }
+        </select>
+    </div>
+    <div class="col-md-3">
+        <button class="btn btn-outline-primary w-100" @onclick="SendTest">Send test late notification</button>
+    </div>
+    <div class="col-md-3">
+        <small class="text-muted d-block">Sends via supervisor's preference (Email/SMS). Uses current time as login
+            time.</small>
+    </div>
+</div>
+
+@code {
+    private List<Employee> employees = new();
+    private string? selectedEmployeeId;
+
+    protected override void OnInitialized()
+    {
+        employees = EmployeeService.GetAllEmployees().ToList();
+    }
+
+    private async Task SendTest()
+    {
+        if (string.IsNullOrWhiteSpace(selectedEmployeeId))
+        {
+            await JS.InvokeVoidAsync("alert", "Please select an employee first.");
+            return;
+        }
+
+        if (!Guid.TryParse(selectedEmployeeId, out var id))
+        {
+            await JS.InvokeVoidAsync("alert", "Invalid employee selection.");
+            return;
+        }
+
+        var employee = EmployeeService.GetEmployeeById(id);
+        if (employee == null)
+        {
+            await JS.InvokeVoidAsync("alert", "Employee not found.");
+            return;
+        }
+
+        if (employee.Supervisor == null)
+        {
+            await JS.InvokeVoidAsync("alert", "Selected employee doesn't have a supervisor.");
+            return;
+        }
+
+        if (employee.Supervisor.NotificationPreference == NotificationPreference.None)
+        {
+            await JS.InvokeVoidAsync("alert", $"Supervisor {employee.Supervisor.FullName} has notifications disabled.");
+            return;
+        }
+
+        await NotificationService.SendLateArrivalNotificationAsync(employee, DateTime.Now);
+        await JS.InvokeVoidAsync("alert", "Test notification triggered. Check your email/SMS or application logs.");
+    }
+}

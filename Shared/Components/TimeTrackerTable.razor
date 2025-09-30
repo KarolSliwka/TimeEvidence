@@ -1,0 +1,144 @@
+@using TimeEvidence.Models
+@using TimeEvidence.Services
+@inject EmployeeService EmployeeService
+
+<div class="table-responsive">
+    <table class="table table-striped table-hover align-middle">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Received</th>
+                <th>System</th>
+                <th>Action</th>
+                <th>Card</th>
+                <th>Employee</th>
+                <th>Access</th>
+                <th>Status</th>
+                <th>Local Time</th>
+                <th>Sessions</th>
+                <th>WiFi</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var data in TimeTrackerDataList.Take(50))
+            {
+                <tr class="@(IsNewestEntry(data) ? "table-success" : string.Empty)">
+                    <td>@data.Id</td>
+                    <td>@data.ReceivedTimestamp.ToString("yyyy-MM-dd HH:mm:ss")</td>
+                    <td>@(data.SystemId ?? "Unknown")</td>
+                    <td>
+                        <span class="badge @GetActionBadgeClass(data.Action)">@(data.Action ?? "Unknown")</span>
+                    </td>
+                    <td><code>@(data.CardId?.Trim() ?? "N/A")</code></td>
+                    <td>
+                        @if (!string.IsNullOrWhiteSpace(data.EmployeeName))
+                        {
+                            <strong>@data.EmployeeName</strong>
+                        }
+                        else
+                        {
+                            <em class="text-muted">Unassigned</em>
+                        }
+                    </td>
+                    <td>
+                        <span class="badge @GetAccessLevelBadgeClass(data.AccessLevel)">@(data.AccessLevel ??
+                                                    "Unknown")</span>
+                    </td>
+                    <td>
+                        <span class="badge @GetStatusBadgeClass(data.Status)">@(data.Status ?? "Unknown")</span>
+                    </td>
+                    <td>@(data.TimestampLocal ?? "N/A")</td>
+                    <td>@(data.ActiveSessions?.ToString() ?? "N/A")</td>
+                    <td>
+                        @if (data.WifiConnected.HasValue)
+                        {
+                            if (data.WifiConnected.Value)
+                            {
+                                <span class="badge bg-success">Online</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-secondary">Offline</span>
+                            }
+                        }
+                        else
+                        {
+                            <span class="badge bg-warning">Unknown</span>
+                        }
+                    </td>
+                    <td>
+                        @if (!string.IsNullOrWhiteSpace(data.CardId))
+                        {
+                            var normalizedCard = (data.CardId ?? string.Empty).Trim();
+                            if (IsCardAlreadyAssigned(normalizedCard))
+                            {
+                                <span class="badge bg-success"><i class="fas fa-check"></i> Assigned</span>
+                            }
+                            else
+                            {
+                                <button class="btn btn-sm btn-outline-primary"
+                                    @onclick="() => OnAssignCard.InvokeAsync(normalizedCard)">
+                                    Assign @normalizedCard
+                                </button>
+                            }
+                        }
+                        else
+                        {
+                            <em class="text-muted">No card</em>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@code {
+    [Parameter] public IEnumerable<TimeTrackerData> TimeTrackerDataList { get; set; } = new List<TimeTrackerData>();
+    [Parameter] public EventCallback<string> OnAssignCard { get; set; }
+
+    private string GetActionBadgeClass(string? action)
+    {
+        return action?.ToUpper() switch
+        {
+            "LOGIN" => "bg-success",
+            "LOGOUT" => "bg-warning",
+            "ERROR" => "bg-danger",
+            _ => "bg-info"
+        };
+    }
+
+    private string GetStatusBadgeClass(string? status)
+    {
+        return status?.ToUpper() switch
+        {
+            "SUCCESS" => "bg-success",
+            "FAILED" or "ERROR" => "bg-danger",
+            "PENDING" => "bg-warning",
+            _ => "bg-secondary"
+        };
+    }
+
+    private string GetAccessLevelBadgeClass(string? accessLevel)
+    {
+        return accessLevel?.ToUpper() switch
+        {
+            "AUTHORIZED" => "bg-success",
+            "UNAUTHORIZED" => "bg-danger",
+            "UNKNOWN" => "bg-warning",
+            _ => "bg-secondary"
+        };
+    }
+
+    private bool IsNewestEntry(TimeTrackerData data)
+    {
+        // Highlight entries received within the last 10 seconds
+        return (DateTime.Now - data.ReceivedTimestamp).TotalSeconds <= 10;
+    }
+
+    private bool IsCardAlreadyAssigned(string? cardId)
+    {
+        return !string.IsNullOrEmpty(cardId) && EmployeeService.IsCardAssigned(cardId);
+    }
+}

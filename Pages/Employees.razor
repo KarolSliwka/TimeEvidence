@@ -1,0 +1,433 @@
+@page "/employees"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using TimeEvidence.Services
+@using TimeEvidence.Models
+@using TimeEvidence.Models.DTOs
+@inject EmployeeService EmployeeService
+@inject IJSRuntime JSRuntime
+@inject NavigationManager Navigation
+
+<PageTitle>Employee Management</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Employee Management</h1>
+    <div>
+        <button class="btn btn-outline-secondary me-2" @onclick="GoBack">
+            <i class="fas fa-arrow-left"></i> Go Back
+        </button>
+        <a href="/supervisors" class="btn btn-outline-info me-2">
+            <i class="fas fa-user-tie"></i> Supervisors
+        </a>
+        <a href="/schedules" class="btn btn-outline-primary me-2">
+            <i class="fas fa-calendar-alt"></i> Schedules
+        </a>
+        <button class="btn btn-success" @onclick="ShowAddEmployeeModal">
+            <i class="fas fa-plus"></i> Add Employee
+        </button>
+    </div>
+</div>
+
+@if (employees != null && employees.Any())
+{
+    <div class="table-responsive">
+        <table class="table table-striped table-hover">
+            <thead class="table-dark">
+                <tr>
+                    <th>Name</th>
+                    <th>Position</th>
+                    <th>Card ID</th>
+                    <th>Access Status</th>
+                    <th>Supervisor</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var employee in employees)
+                {
+                    <tr>
+                        <td><strong>@employee.FullName</strong></td>
+                        <td>@employee.Position</td>
+                        <td>
+                            @if (employee.IsCardAssigned)
+                            {
+                                <code>@employee.CardId</code>
+                            }
+                            else
+                            {
+                                <em class="text-muted">Not assigned</em>
+                            }
+                        </td>
+                        <td>
+                            <span class="badge @(employee.Access ? "bg-success" : "bg-danger")">
+                                @employee.AccessStatus
+                            </span>
+                        </td>
+                        <td>@(GetSupervisorName(employee.SupervisorId))</td>
+                        <td>
+                            @if (!employee.IsCardAssigned)
+                            {
+                                <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => ShowAssignCardModal(employee)">
+                                    <i class="fas fa-credit-card"></i> Assign Card
+                                </button>
+                            }
+                            else
+                            {
+                                <button class="btn btn-sm btn-outline-warning me-1" @onclick="() => UnassignCard(employee.CardId!)">
+                                    <i class="fas fa-times"></i> Unassign Card
+                                </button>
+                            }
+                            <button class="btn btn-sm btn-outline-secondary me-1" @onclick="() => ToggleAccess(employee)">
+                                <i class="fas @(employee.Access ? "fa-lock" : "fa-unlock")"></i>
+                                @(employee.Access ? "Revoke" : "Grant")
+                            </button>
+                            <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => EditEmployee(employee)">
+                                <i class="fas fa-edit"></i> Edit
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteEmployee(employee)">
+                                <i class="fas fa-trash"></i> Delete
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+else
+{
+    <div class="alert alert-info">
+        <h4><i class="fas fa-info-circle"></i> No Employees Found</h4>
+        <p>Click "Add Employee" to create your first employee record.</p>
+    </div>
+}
+
+<!-- Card Assignment Modal -->
+@if (showAssignCardModal && selectedEmployee != null)
+{
+    <div class="modal show d-block" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Assign Card to @selectedEmployee.FullName</h5>
+                    <button type="button" class="btn-close" @onclick="CloseModals"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Card ID</label>
+                        <input type="text" class="form-control" @bind="newCardId"
+                            placeholder="Enter card ID (e.g., F3222711)" />
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" @bind="grantAccess" id="grantAccessCheck">
+                        <label class="form-check-label" for="grantAccessCheck">
+                            Grant access immediately
+                        </label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseModals">Cancel</button>
+                    <button type="button" class="btn btn-primary" @onclick="AssignCard">Assign Card</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop show"></div>
+}
+
+<!-- Add Employee Modal -->
+@if (showAddEmployeeModal)
+{
+    <div class="modal show d-block" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Add New Employee</h5>
+                    <button type="button" class="btn-close" @onclick="CloseModals"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">First Name</label>
+                            <input type="text" class="form-control" @bind="newEmployee.Name" />
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Last Name</label>
+                            <input type="text" class="form-control" @bind="newEmployee.Surname" />
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Position</label>
+                        <input type="text" class="form-control" @bind="newEmployee.Position" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Supervisor</label>
+                        <select class="form-select" @bind="newEmployee.SupervisorId">
+                            <option value="">Select supervisor...</option>
+                            @if (supervisors != null)
+                            {
+                                @foreach (var supervisor in supervisors)
+                                {
+                                    <option value="@supervisor.Id">@supervisor.FullName</option>
+                                }
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseModals">Cancel</button>
+                    <button type="button" class="btn btn-primary" @onclick="AddEmployee">Add Employee</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop show"></div>
+}
+
+<!-- Edit Employee Modal -->
+@if (showEditEmployeeModal && editingEmployee != null)
+{
+    <div class="modal show d-block" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Edit Employee</h5>
+                    <button type="button" class="btn-close" @onclick="CloseEditModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">First Name *</label>
+                            <input type="text" class="form-control" @bind="editingEmployee.Name" />
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Last Name *</label>
+                            <input type="text" class="form-control" @bind="editingEmployee.Surname" />
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Position</label>
+                        <input type="text" class="form-control" @bind="editingEmployee.Position" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Card ID</label>
+                        <input type="text" class="form-control" @bind="editingEmployee.CardId"
+                            placeholder="Enter card ID or leave empty if not assigned" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Supervisor</label>
+                        <select class="form-select" @bind="editingEmployee.SupervisorId">
+                            <option value="@Guid.Empty">No Supervisor</option>
+                            @if (supervisors != null)
+                            {
+                                @foreach (var supervisor in supervisors)
+                                {
+                                    <option value="@supervisor.Id">@supervisor.FullName</option>
+                                }
+                            }
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Access</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" @bind="editingEmployee.Access" id="editAccess">
+                            <label class="form-check-label" for="editAccess">
+                                Grant Access
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseEditModal">Cancel</button>
+                    <button type="button" class="btn btn-primary" @onclick="UpdateEmployee">Update Employee</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop show"></div>
+}
+
+@code {
+    private IEnumerable<Employee>? employees;
+    private IEnumerable<Supervisor>? supervisors;
+    private bool showAssignCardModal = false;
+    private bool showAddEmployeeModal = false;
+    private bool showEditEmployeeModal = false;
+    private Employee? selectedEmployee;
+    private Employee? editingEmployee;
+    private string newCardId = string.Empty;
+    private bool grantAccess = true;
+    private Employee newEmployee = new Employee();
+
+    protected override void OnInitialized()
+    {
+        RefreshData();
+    }
+
+    private void RefreshData()
+    {
+        employees = EmployeeService.GetAllEmployees();
+        supervisors = EmployeeService.GetAllSupervisors();
+    }
+
+    private string GetSupervisorName(Guid? supervisorId)
+    {
+        if (!supervisorId.HasValue) return "None";
+        var supervisor = supervisors?.FirstOrDefault(s => s.Id == supervisorId.Value);
+        return supervisor?.FullName ?? "Unknown";
+    }
+
+    private void ShowAssignCardModal(Employee employee)
+    {
+        selectedEmployee = employee;
+        newCardId = string.Empty;
+        grantAccess = true;
+        showAssignCardModal = true;
+    }
+
+    private void ShowAddEmployeeModal()
+    {
+        newEmployee = new Employee { Position = "Tester" };
+        showAddEmployeeModal = true;
+    }
+
+    private void CloseModals()
+    {
+        showAssignCardModal = false;
+        showAddEmployeeModal = false;
+        selectedEmployee = null;
+        newCardId = string.Empty;
+    }
+
+    private async Task AssignCard()
+    {
+        if (selectedEmployee == null || string.IsNullOrWhiteSpace(newCardId))
+            return;
+
+        try
+        {
+            var result = EmployeeService.AssignCardToEmployee(selectedEmployee.Id, newCardId.Trim(), grantAccess);
+            if (result != null)
+            {
+                await JSRuntime.InvokeVoidAsync("alert", $"Card {newCardId} successfully assigned to {result.FullName}");
+                RefreshData();
+                CloseModals();
+            }
+        }
+        catch (InvalidOperationException ex)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", ex.Message);
+        }
+    }
+
+    private async Task UnassignCard(string cardId)
+    {
+        var confirm = await JSRuntime.InvokeAsync<bool>("confirm", $"Are you sure you want to unassign card {cardId}?");
+        if (!confirm) return;
+
+        var success = EmployeeService.UnassignCard(cardId);
+        if (success)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Card {cardId} has been unassigned");
+            RefreshData();
+        }
+    }
+
+    private async Task ToggleAccess(Employee employee)
+    {
+        employee.Access = !employee.Access;
+        var result = EmployeeService.UpdateEmployee(employee);
+        if (result != null)
+        {
+            await JSRuntime.InvokeVoidAsync("alert",
+            $"Access {(employee.Access ? "granted" : "revoked")} for {employee.FullName}");
+            RefreshData();
+        }
+    }
+
+    private async Task AddEmployee()
+    {
+        if (string.IsNullOrWhiteSpace(newEmployee.Name) || string.IsNullOrWhiteSpace(newEmployee.Surname))
+        {
+            await JSRuntime.InvokeVoidAsync("alert", "Please fill in both first and last name");
+            return;
+        }
+
+        var result = EmployeeService.CreateEmployee(newEmployee);
+        await JSRuntime.InvokeVoidAsync("alert", $"Employee {result.FullName} created successfully");
+        RefreshData();
+        CloseModals();
+    }
+
+    private void EditEmployee(Employee employee)
+    {
+        editingEmployee = new Employee
+        {
+            Id = employee.Id,
+            Name = employee.Name,
+            Surname = employee.Surname,
+            Position = employee.Position,
+            Access = employee.Access,
+            CardId = employee.CardId,
+            SupervisorId = employee.SupervisorId,
+            WorkScheduleId = employee.WorkScheduleId,
+            CreatedAt = employee.CreatedAt,
+            UpdatedAt = employee.UpdatedAt
+        };
+        showEditEmployeeModal = true;
+    }
+
+    private void CloseEditModal()
+    {
+        showEditEmployeeModal = false;
+        editingEmployee = null;
+    }
+
+    private async Task UpdateEmployee()
+    {
+        if (editingEmployee == null) return;
+
+        if (string.IsNullOrWhiteSpace(editingEmployee.Name) ||
+        string.IsNullOrWhiteSpace(editingEmployee.Surname))
+        {
+            await JSRuntime.InvokeVoidAsync("alert", "Please fill in both first and last name");
+            return;
+        }
+
+        var result = EmployeeService.UpdateEmployee(editingEmployee);
+        if (result != null)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Employee {result.FullName} updated successfully");
+            RefreshData();
+            CloseEditModal();
+        }
+        else
+        {
+            await JSRuntime.InvokeVoidAsync("alert", "Error updating employee");
+        }
+    }
+
+    private async Task DeleteEmployee(Employee employee)
+    {
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm",
+        $"Are you sure you want to delete employee {employee.FullName}?");
+
+        if (!confirmed) return;
+
+        var success = EmployeeService.DeleteEmployee(employee.Id);
+
+        if (success)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Employee {employee.FullName} deleted successfully");
+            RefreshData();
+        }
+        else
+        {
+            await JSRuntime.InvokeVoidAsync("alert", "Error deleting employee");
+        }
+    }
+
+    private void GoBack()
+    {
+        Navigation.NavigateTo("/");
+    }
+}
